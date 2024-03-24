@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAT FEEDER EXCLUSIVE MEGA FUSION MASTER 360 V56</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js"></script>
+</head>
+<body onload="populateTable()">
+    <h1 id="title">Cat feeder project website</h1><br>
+    <div>
+        <form action="/testFeatures" method="get">
+            <input type="submit" value="Test features">
+        </form>
+    </div>
+    <div>
+        <form action="/up" method="get">
+            <button type="submit" id="feedButton">UP</button>
+        </form>
+        <form action="/down" method="get">
+            <button type="submit" id="feedButton">DOWN</button>
+        </form>
+    </div>
+    <br>
+    <div>
+        <form action="/insertData" id="insertForm" method="post">
+            <label for="timeInput">Insert more feeding times</label><br>
+            <input type="time" name="timeInput" id="timeInput"><br>
+            <label for="cycles">Cycles: </label><br>
+            <input type="text" name="cycles" id="cycles" placeholder="0"><br>
+            <input type="submit" value="Submit">
+        </form>
+    </div>
+    <br>
+    <div>
+        <table id="timesTable">
+            <tr>
+                <th>FeedTime</th>
+                <th>Cycles</th>
+                <th>Delete</th>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>

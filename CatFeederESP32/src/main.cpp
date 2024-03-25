@@ -15,7 +15,7 @@ int minPos = 0;
 int nextFeedCycles;
 
 // Save how long the esp has to sleep for next 
-int64_t nextTimeInMicroSec;
+int64_t nextTimeInMicroSec = 0;
 
 // WIFI credentials
 
@@ -119,7 +119,7 @@ void calculateSleepyTime(){
   JsonArray times = doc["times"];
 
   int minTime = 9999999;
-  String nextTime;
+  int nextTimeDiff = 0;
 
   // Get next feeding time
   for (size_t i = 0; i < times.size(); i++) {
@@ -129,20 +129,21 @@ void calculateSleepyTime(){
 
     int timeDiff = timesHourMinute.toInt() - localHourMinute;
 
-    if(timeDiff > 0 && timeDiff < minTime){
+    // if timeDiff is a negative
+    if(timeDiff > 0){
+      int timeDiff = timesHourMinute + 2400 - localHourMinute;
+    }
+
+    // if time in times is closer then replace nextTime and nextFeedCycles.
+    if(timeDiff < minTime){
       minTime = timeDiff;
-      nextTime = timesTime;
+      nextTimeDiff = timeDiff;
       nextFeedCycles = timesCycles;
     }
   }
 
-  // Calculate next feeding time in microseconds. (SIIN ON MIDAGI VIGA OMG)
-  Serial.print("localtim");
-  Serial.println(localHourMinute);
-  nextTimeInMicroSec = (nextTime.substring(0,2)).toInt() * 3600000000  + (nextTime.substring(3,5)).toInt() * 60000000 - (String(localHourMinute).substring(0,2)).toInt() * 3600000000 - (String(localHourMinute).substring(2,4)).toInt() * 60000000; 
-
-  Serial.print("Next time: ");
-  Serial.println(nextTime);
+  // Calculate next feeding time in microseconds.
+  nextTimeInMicroSec = (nextTimeDiff.substring(0,2)).toInt() * 3600000000  + (nextTimeDiff.substring(3,5)).toInt() * 60000000;
 
   Serial.print("Next time in microsecs: ");
   Serial.println(nextTimeInMicroSec);
@@ -250,7 +251,6 @@ void setup() {
       delay(2000);
       digitalWrite(21, LOW);
       delay(2000);
-      break;
     }
   }
 
@@ -369,13 +369,20 @@ void setup() {
   calculateSleepyTime();
 
   // goes to sleep for the next feeding - 1 minute
-  Serial.print("Going to sleep for");
-  // SAAB MINNA MAGAMA - AEG OMGFSD
-  Serial.println(nextTimeInMicroSec / 60000000);
+  Serial.print("Going to sleep for ");
+  Serial.print(nextTimeInMicroSec / 60000000);
+  Serial.println(" minutes");
+
+  // Kui kuidagi nextTimeInMicroSec on negatiivne siis muutub 0-iks
+  if (nextTimeInMicroSec < 0)
+  {
+    nextTimeInMicroSec = 0
+  }
+  
   ESP.deepSleep(nextTimeInMicroSec - 60000000); 
 }
 void loop(){
-  // ei jõua siia :D
+  // poo
 }
 
 //kkirjuta button mingi nuppu sisendi, nuppu sisendi d8 siis voltage divider a1

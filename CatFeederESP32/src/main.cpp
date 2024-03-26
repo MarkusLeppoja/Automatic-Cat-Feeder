@@ -151,7 +151,7 @@ void calculateSleepyTime(){
         nextTimeInMicroSec = (nextTime.substring(0,2).toInt() * 3600000000 + nextTime.substring(3,5).toInt() * 60000000) + (24 * 3600000000) - (String(localHourMinute).substring(0, 2).toInt() * 3600000000 + String(localHourMinute).substring(2, 4).toInt() * 60000000);
       } 
       else {
-        nextTimeInMicroSec = nextTime.substring(0,2).toInt() * 3600000000 + nextTime.substring(3,5).toInt() * 60000000;
+        nextTimeInMicroSec = (String(localHourMinute).substring(0, 2).toInt() * 3600000000 + String(localHourMinute).substring(2, 4).toInt() * 60000000) - (nextTime.substring(0,2).toInt() * 3600000000 + nextTime.substring(3,5).toInt() * 60000000);
       }
   }
 
@@ -380,7 +380,7 @@ void setup() {
 
   // goes to sleep for the next feeding - 1 minute
   Serial.print("Going to sleep for ");
-  Serial.print(nextTimeInMicroSec / 60000000);
+  Serial.print(nextTimeInMicroSec / 60000000 - 60000000);
   Serial.println(" minutes");
 
   // Kui nextTimeInMicroSec -1 minute on negatiivne siis läheb magama 0 sekundiks (see ei tohiks juhtuda suht kindel aga igaks juhuks)

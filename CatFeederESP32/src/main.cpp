@@ -20,12 +20,12 @@ int64_t nextTimeInMicroSec = 0;
 // WIFI credentials
 
 // Credentials for accsess point 
-const char* ssidHost = "ESP32test";
+const char* ssidHost = "Cat Feeder";
 const char* passwordHost = "123456789";
 
 // Credentials for router that esp connects to
-const char* ssid = "M.A.A. Wifi";
-const char* password = "271750540";
+const char* ssid = "PaulKerese45";
+const char* password = "6M6TWMAEGE";
 
 AsyncWebServer server(80);
 
@@ -64,7 +64,7 @@ void pulse(int cycles){
 }
 
 float isBatteryEmpty(){
-  return analogRead(A1) * 3.3f / 4096.f * 5;
+  return analogReadMilliVolts(A1) / 200;
 }
 
 void connectToRouter(){
@@ -98,7 +98,7 @@ void getLocalTime(){
   char timeMinute[3];
   strftime(timeMinute,3, "%M", &timeinfo);
 
-  String hourMinute = String(timeHour) + String(timeMinute);
+  String hourMinute = String(timeHour).substring(0,2) + String(timeMinute).substring(0,2);
   localHourMinute = hourMinute.toInt();
 
   // Disconnect from wifi as it is not needed anymore
@@ -121,12 +121,12 @@ void calculateSleepyTime(){
   int minTime = 9999999;
   String nextTime;
 
-  // Get next feeding time
+  // Get next feeding time 
   for (size_t i = 0; i < times.size(); i++) {
     String timesTime = times[i]["time"];
+    Serial.println(timesTime);
     int timesHourMinute = timesTime.substring(0, 2).toInt() + timesTime.substring(3, 5).toInt();
     int timesCycles = times[i]["cycles"];
-
     int timeDiff = timesHourMinute - localHourMinute;
 
     // if timeDiff is a negative
@@ -143,23 +143,31 @@ void calculateSleepyTime(){
   }
 
   // If nextTime isSet (Should only be NULL if times is empty)
-  if (nextTime != NULL)
-  {
-      // Calculate next feeding time in microseconds.
-      if ((nextTime.substring(0,2) + nextTime.substring(3,5)).toInt() - localHourMinute < 0) {
-        // see näeb rets välja XD
-        nextTimeInMicroSec = (nextTime.substring(0,2).toInt() * 3600000000 + nextTime.substring(3,5).toInt() * 60000000) + (24 * 3600000000) - (String(localHourMinute).substring(0, 2).toInt() * 3600000000 + String(localHourMinute).substring(2, 4).toInt() * 60000000);
-      } 
-      else {
-        nextTimeInMicroSec = (String(localHourMinute).substring(0, 2).toInt() * 3600000000 + String(localHourMinute).substring(2, 4).toInt() * 60000000) - (nextTime.substring(0,2).toInt() * 3600000000 + nextTime.substring(3,5).toInt() * 60000000);
-      }
+  if (nextTime == NULL) return;
+  
+  // Calculate next feeding time in microseconds.
+  if ((nextTime.substring(0,2) + nextTime.substring(3,5)).toInt() - localHourMinute < 0) {
+    // see näeb rets välja XD
+    nextTimeInMicroSec = (nextTime.substring(0,2).toInt() * 3600000000 + nextTime.substring(3,5).toInt() * 60000000) + (24 * 3600000000) - (String(localHourMinute).substring(0, 2).toInt() * 3600000000 + String(localHourMinute).substring(2, 4).toInt() * 60000000);
+  } 
+  else {
+    nextTimeInMicroSec = (nextTime.substring(0,2).toInt() * 3600000000) + (nextTime.substring(3,5).toInt() * 60000000) - (String(localHourMinute).substring(0, 2).toInt() * 3600000000) + (String(localHourMinute).substring(2, 4).toInt() * 60000000);
   }
-
+  
   Serial.print("Next time in microsecs: ");
   Serial.println(nextTimeInMicroSec);
 
+  Serial.print("Next time in minutes: ");
+  Serial.println(nextTimeInMicroSec / 60000000);
+
   Serial.print("Next feed cycles: ");
   Serial.println(nextFeedCycles);
+
+  Serial.print("Next time: ");
+  Serial.println(nextTime);
+
+  Serial.print("Local time: ");
+  Serial.println(localHourMinute);
 }
 
 void handleDeleteRow(AsyncWebServerRequest *request) {
@@ -248,21 +256,6 @@ void handleInsertData(AsyncWebServerRequest *request) {
 void setup() {
   Serial.begin(115200);
   delay(500);
-
-    Serial.println("BATTERY " + String(isBatteryEmpty()));
-
-  if (isBatteryEmpty() < 7.1)
-  {
-    pinMode(21, INPUT);
-    while (true)
-    {
-      Serial.println("BATTERY LOW" + String(isBatteryEmpty()));
-      digitalWrite(21, HIGH); 
-      delay(2000);
-      digitalWrite(21, LOW);
-      delay(2000);
-    }
-  }
 
   attachServo();
 
@@ -365,9 +358,9 @@ void setup() {
   server.begin();
 
   // stays awake for 10 minutes after everything is done
-  for(int timre = 0; timre < 600; timre += 10){
+  for(int timre = 0; timre < 300; timre += 10){
     Serial.print("Going to sleep in ");
-    Serial.println(600 - timre);
+    Serial.println(300 - timre);
     delay(10000);
   }
 
@@ -389,7 +382,8 @@ void setup() {
   {
     nextTimeInMicroSec = 0;
   }
-  ESP.deepSleep(nextTimeInMicroSec); 
+  ESP.deepSleep(nextTimeInMicroSec);
+  ESP.restart();
 }
 void loop(){
   // poo

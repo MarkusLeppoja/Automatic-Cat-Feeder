@@ -12,7 +12,7 @@ int maxPos = 180;
 int minPos = 0;
 
 //how many cycles to feed the cat for next
-int nextFeedCycles;
+int nextFeedCycles = 0;
 
 // Save how long the esp has to sleep for next 
 int64_t nextTimeInMicroSec = 0;
@@ -119,31 +119,41 @@ void calculateSleepyTime(){
   JsonArray times = doc["times"];
 
   int minTime = 9999999;
-  int nextTimeDiff = 0;
+  String nextTime;
 
   // Get next feeding time
   for (size_t i = 0; i < times.size(); i++) {
     String timesTime = times[i]["time"];
-    String timesHourMinute = timesTime.substring(0, 2) + timesTime.substring(3, 5);
+    int timesHourMinute = timesTime.substring(0, 2).toInt() + timesTime.substring(3, 5).toInt();
     int timesCycles = times[i]["cycles"];
 
-    int timeDiff = timesHourMinute.toInt() - localHourMinute;
+    int timeDiff = timesHourMinute - localHourMinute;
 
     // if timeDiff is a negative
-    if(timeDiff > 0){
-      int timeDiff = timesHourMinute + 2400 - localHourMinute;
+    if(timeDiff < 0){
+      timeDiff = timesHourMinute + 2400 - localHourMinute;
     }
 
     // if time in times is closer then replace nextTime and nextFeedCycles.
     if(timeDiff < minTime){
       minTime = timeDiff;
-      nextTimeDiff = timeDiff;
+      nextTime = timesTime;
       nextFeedCycles = timesCycles;
     }
   }
 
-  // Calculate next feeding time in microseconds.
-  nextTimeInMicroSec = (nextTimeDiff.substring(0,2)).toInt() * 3600000000  + (nextTimeDiff.substring(3,5)).toInt() * 60000000;
+  // If nextTime isSet (Should only be NULL if times is empty)
+  if (nextTime != NULL)
+  {
+      // Calculate next feeding time in microseconds.
+      if ((nextTime.substring(0,2) + nextTime.substring(3,5)).toInt() - localHourMinute < 0) {
+        // see näeb rets välja XD
+        nextTimeInMicroSec = (nextTime.substring(0,2).toInt() * 3600000000 + nextTime.substring(3,5).toInt() * 60000000) + (24 * 3600000000) - (String(localHourMinute).substring(0, 2).toInt() * 3600000000 + String(localHourMinute).substring(2, 4).toInt() * 60000000);
+      } 
+      else {
+        nextTimeInMicroSec = nextTime.substring(0,2).toInt() * 3600000000 + nextTime.substring(3,5).toInt() * 60000000;
+      }
+  }
 
   Serial.print("Next time in microsecs: ");
   Serial.println(nextTimeInMicroSec);
@@ -373,13 +383,13 @@ void setup() {
   Serial.print(nextTimeInMicroSec / 60000000);
   Serial.println(" minutes");
 
-  // Kui kuidagi nextTimeInMicroSec on negatiivne siis muutub 0-iks
-  if (nextTimeInMicroSec < 0)
+  // Kui nextTimeInMicroSec -1 minute on negatiivne siis läheb magama 0 sekundiks (see ei tohiks juhtuda suht kindel aga igaks juhuks)
+  nextTimeInMicroSec -= 60000000;
+  if (nextTimeInMicroSec  < 0)
   {
-    nextTimeInMicroSec = 0
+    nextTimeInMicroSec = 0;
   }
-  
-  ESP.deepSleep(nextTimeInMicroSec - 60000000); 
+  ESP.deepSleep(nextTimeInMicroSec); 
 }
 void loop(){
   // poo

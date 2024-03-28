@@ -15,7 +15,7 @@ int minPos = 0;
 int nextFeedCycles = 0;
 
 // Save how long the esp has to sleep for next 
-int64_t nextTimeInMicroSec = 0;
+float nextTimeInMicroSec = 0;
 
 // WIFI credentials
 
@@ -81,6 +81,9 @@ void connectToRouter(){
   server.begin();
 }
 
+int currentHour;
+int currentMinute;
+
 void getLocalTime(){
   connectToRouter();
 
@@ -98,6 +101,9 @@ void getLocalTime(){
   char timeMinute[3];
   strftime(timeMinute,3, "%M", &timeinfo);
 
+  currentHour = String(timeHour).substring(0,2).toInt();
+  currentMinute = String(timeMinute).substring(0,2).toInt();
+
   String hourMinute = String(timeHour).substring(0,2) + String(timeMinute).substring(0,2);
   localHourMinute = hourMinute.toInt();
 
@@ -106,9 +112,7 @@ void getLocalTime(){
   WiFi.mode(WIFI_OFF);
 }
 
-void calculateSleepyTime(){
-  getLocalTime();
-
+boolean calculateSleepyTime(int hour, int minute){
   File file = SPIFFS.open("/feedTimes.json", "r");
 
   StaticJsonDocument<1024> doc;
@@ -118,56 +122,69 @@ void calculateSleepyTime(){
   // Get times array
   JsonArray times = doc["times"];
 
-  int minTime = 9999999;
   String nextTime;
 
-  // Get next feeding time 
-  for (size_t i = 0; i < times.size(); i++) {
+  float nextFeedTimeInSeconds = 5184000, nextFeedindex = 0;
+
+  // Find next feeding time
+  for (size_t i = 0; i < times.size(); i++) 
+  {
+    Serial.println("Current Hour & Minute: " + String(hour) + ":" + String(minute));
+
     String timesTime = times[i]["time"];
-    Serial.println(timesTime);
-    int timesHourMinute = timesTime.substring(0, 2).toInt() + timesTime.substring(3, 5).toInt();
-    int timesCycles = times[i]["cycles"];
-    int timeDiff = timesHourMinute - localHourMinute;
+    Serial.println("Target Clock: " + String(timesTime));
 
-    // if timeDiff is a negative
-    if(timeDiff < 0){
-      timeDiff = timesHourMinute + 2400 - localHourMinute;
+    int feedHour = timesTime.substring(0,2).toInt();
+    int feedMinute = timesTime.substring(3,5).toInt();
+
+    int targetHour = (feedHour - hour); 
+    int targetMinute = (feedMinute - minute); 
+
+    Serial.println("Feed Hour & Minute Difference: " + String(targetHour) + " " + String(targetMinute));
+
+
+    if ((targetHour >= 0 && targetMinute >= 0)) //Kas feed on täna?
+    {
+      int nextFeedInSeconds = int(targetHour * 3600) + int(targetMinute * 60); //Mitme sekundi pärast on feed? 
+
+      Serial.println("Feeding cat today, in: " + String(nextFeedInSeconds));
+
+      if (nextFeedTimeInSeconds > nextFeedInSeconds)
+      {
+        Serial.println("Updating closest feed time to: " + String(nextFeedInSeconds));
+        nextFeedTimeInSeconds = nextFeedInSeconds;
+        nextFeedindex = i;
+      }
     }
+    else if ((targetHour > 0 && targetMinute < 0))
+    {
+      int nextFeedInSeconds = int((targetHour - 1) * 3600) + int((60 + targetMinute) * 60); //Mitme sekundi pärast on feed? 
 
-    // if time in times is closer then replace nextTime and nextFeedCycles.
-    if(timeDiff < minTime){
-      minTime = timeDiff;
-      nextTime = timesTime;
-      nextFeedCycles = timesCycles;
+      Serial.println("Feeding cat today, in: " + String(nextFeedInSeconds));
+
+      if (nextFeedTimeInSeconds > nextFeedInSeconds)
+      {
+        Serial.println("Updating closest feed time to: " + String(nextFeedInSeconds));
+        nextFeedTimeInSeconds = nextFeedInSeconds;
+        nextFeedindex = i;
+      }
     }
+    Serial.println(" ");
   }
+  
+  if (nextFeedTimeInSeconds == 5184000) 
+  {
+    Serial.println("No feeding happening today!");
+    return false;
+  }
+  nextTimeInMicroSec = nextFeedTimeInSeconds;
+  nextFeedCycles = times[nextFeedindex]["cycles"];
 
-  // If nextTime isSet (Should only be NULL if times is empty)
-  if (nextTime == NULL) return;
-  
-  // Calculate next feeding time in microseconds.
-  if ((nextTime.substring(0,2) + nextTime.substring(3,5)).toInt() - localHourMinute < 0) {
-    // see näeb rets välja XD
-    nextTimeInMicroSec = (nextTime.substring(0,2).toInt() * 3600000000 + nextTime.substring(3,5).toInt() * 60000000) + (24 * 3600000000) - (String(localHourMinute).substring(0, 2).toInt() * 3600000000 + String(localHourMinute).substring(2, 4).toInt() * 60000000);
-  } 
-  else {
-    nextTimeInMicroSec = (nextTime.substring(0,2).toInt() * 3600000000) + (nextTime.substring(3,5).toInt() * 60000000) - (String(localHourMinute).substring(0, 2).toInt() * 3600000000) + (String(localHourMinute).substring(2, 4).toInt() * 60000000);
-  }
-  
-  Serial.print("Next time in microsecs: ");
+  Serial.print("Next feed cycles & time in s :");
+  Serial.println(nextFeedCycles);
   Serial.println(nextTimeInMicroSec);
 
-  Serial.print("Next time in minutes: ");
-  Serial.println(nextTimeInMicroSec / 60000000);
-
-  Serial.print("Next feed cycles: ");
-  Serial.println(nextFeedCycles);
-
-  Serial.print("Next time: ");
-  Serial.println(nextTime);
-
-  Serial.print("Local time: ");
-  Serial.println(localHourMinute);
+  return true;
 }
 
 void handleDeleteRow(AsyncWebServerRequest *request) {
@@ -266,21 +283,23 @@ void setup() {
 
   while (true)
   {
-    calculateSleepyTime();
-
-    if(nextTimeInMicroSec < 0){
-      Serial.println("NO TIMES FOUND");
+    getLocalTime();
+    if (!calculateSleepyTime(currentHour, currentMinute))
+    {
+      Serial.println("No more feed times left today.");
       break;
     }
 
-    // If the next feeding time is less than 10 minutes away feed cat
-    if (nextTimeInMicroSec / 60000000 < 10)
+
+    // If the next feeding time is less than 5 minutes away feed cat
+    if (nextTimeInMicroSec / 60 < 5)
     {
-      Serial.print(nextTimeInMicroSec / 60000000);
+      Serial.print(nextTimeInMicroSec / 60);
       Serial.println(" minutes until next feeding");
-      delay(static_cast<uint32_t>(nextTimeInMicroSec / 1000));
+      delay((nextTimeInMicroSec * 1000));
       pulse(nextFeedCycles);
-    }else{
+      delay(60000);
+    } else {
       break;
     }
   }
@@ -357,10 +376,10 @@ void setup() {
 
   server.begin();
 
-  // stays awake for 10 minutes after everything is done
-  for(int timre = 0; timre < 300; timre += 10){
+  // stays awake for 2 minutes after everything is done
+  for(int timre = 0; timre < 120; timre += 10){
     Serial.print("Going to sleep in ");
-    Serial.println(300 - timre);
+    Serial.println(120 - timre);
     delay(10000);
   }
 
@@ -369,24 +388,27 @@ void setup() {
   servo.detach();
 
   // Connect to router to get local time and calculate sleepy time
-  calculateSleepyTime();
+  getLocalTime();
+  if (!calculateSleepyTime(currentHour, currentMinute))
+  {
+    calculateSleepyTime(0,0);
+
+    Serial.print("Feed time after midnight ");
+    Serial.println(nextTimeInMicroSec);
+    
+    // Calculates time til next day and adds it to the counter
+    nextTimeInMicroSec = nextTimeInMicroSec + ((23 - currentHour) * 3600) + ((59 - currentMinute) * 60);
+
+    Serial.print("Next time in seconds ");
+    Serial.println(nextTimeInMicroSec);
+  }
 
   // goes to sleep for the next feeding - 1 minute
   Serial.print("Going to sleep for ");
-  Serial.print(nextTimeInMicroSec / 60000000 - 60000000);
+  Serial.print(nextTimeInMicroSec / 60);
   Serial.println(" minutes");
 
-  // Kui nextTimeInMicroSec -1 minute on negatiivne siis läheb magama 0 sekundiks (see ei tohiks juhtuda suht kindel aga igaks juhuks)
-  nextTimeInMicroSec -= 60000000;
-  if (nextTimeInMicroSec  < 0)
-  {
-    nextTimeInMicroSec = 0;
-  }
-  ESP.deepSleep(nextTimeInMicroSec);
+  ESP.deepSleep(nextTimeInMicroSec * 1000000 - 60 * 1000000);
   ESP.restart();
 }
-void loop(){
-  // poo
-}
-
-//kkirjuta button mingi nuppu sisendi, nuppu sisendi d8 siis voltage divider a1
+void loop(){}
